@@ -1,0 +1,35 @@
+RAE.su2
+0.725
+2.31
+101325
+288.15
+1.40
+287.0
+0.1
+0.000001
+10000000
+1000
+2000
+result.vtk
+farfield 0
+airfoil 1
+
+
+
+KEY:-
+#1)mesh file name
+#2)Mach number
+#3)angle of attack
+#4) free stream pressure
+#5) free stream Temperaure
+#6) gamma constant
+#7) gas constant R
+#8) CFL constant
+#9) residual tolerance
+#10) MAX_ITERS
+#11) print interval
+#12) write interval
+#13) output file name
+#14) number of markers
+#15) marker name , marker type  (must be in same order as mesh file)
+............
