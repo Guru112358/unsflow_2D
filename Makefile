@@ -1,5 +1,5 @@
 CXX := g++
-ACCFLAGS_1 := -Ofast  -march=native   -pg -g 
+ACCFLAGS_1 := -Ofast  -march=native   
 
 
 unsflow: main.cpp 
