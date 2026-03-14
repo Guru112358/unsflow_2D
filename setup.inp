@@ -30,6 +30,5 @@ KEY:-
 #11) print interval
 #12) write interval
 #13) output file name
-#14) number of markers
-#15) marker name , marker type  (must be in same order as mesh file)
+#14) marker name , marker type  (must be in same order as mesh file)
 ............
