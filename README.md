@@ -1,5 +1,5 @@
 This is a simple cell-centred Finite Volume Euler solver on triangular meshes using the SU2 mesh format(filename.su2)  as an input.
-It uses Rusanov Flux with a MUSCL reconstruction and offers a choice of cell-based Barth and Venkatakrishnan limiters. It has been validated here using the RAE 2822 transonic airfoil case with the Benchmark being an SU2 solution on the same grid.
+It uses Rusanov Flux with a Barth reconstruction and offers a choice of cell-based Barth and Venkatakrishnan limiters. It has been validated here using the RAE 2822 transonic airfoil case with the Benchmark being an SU2 solution on the same grid.
 
 The solver currently only supports Euler and far field boundary conditions and can be run after compilation simply by the command " ./unsflow setup.inp" where setup.inp is the setup file that has all the relevant information on how to go about setting parameters.
 
