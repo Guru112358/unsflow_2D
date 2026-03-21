@@ -16,10 +16,53 @@ void compute_conserved_cell_center(primitive &var, conserved &cons, material &ma
 void correct_Gauss_Green_gradient(int cell_index ,facelist_2D &F,cellist_2D &C);
 void compute_barth_limiter_cell(int cell_index, facelist_2D &F, cellist_2D &C);
 primitive reconstruct_face_primitive_limited(const cell2D &C,const point2D &xf);
+void compute_gradient_weights(facelist_2D&F,cellist_2D &C);
 
 
 
 
+
+void compute_gradient_weights(facelist_2D&F,cellist_2D &C)
+{
+
+    for (size_t i = 0; i < C.cell_list.size(); i++)
+    {
+
+    cell2D &cell =C.cell_list[i];
+    
+    for(int f=0;f<3;f++)
+    {
+
+        int fid =cell.face_id_indices[f];
+        int nb = cell.neighbour_cell_number[f];
+
+        face2D &current_face = F.face_list[fid];
+
+        if(nb>=0)// not boundary cell
+        {
+        
+        cell2D  &neighbour = C.cell_list[nb];
+
+
+            double dx = neighbour.centroid.pos[0] - cell.centroid.pos[0];
+            double dy = neighbour.centroid.pos[1] - cell.centroid.pos[1];
+
+            double dx2 = current_face.face_centroid.pos[0] - neighbour.centroid.pos[0];
+            double dy2 = current_face.face_centroid.pos[1] - neighbour.centroid.pos[1];
+
+            double d_owner_neighbour = sqrt(dx*dx + dy*dy);
+            double d_face_neighbour = sqrt(dx2*dx2 + dy2*dy2);
+
+
+            current_face.gc = d_face_neighbour/d_owner_neighbour;
+
+        }   
+
+    }
+    
+    }
+
+}
 
 inline double barth_limiter(double dq, double qC, double qmin, double qmax)
     {
@@ -157,9 +200,11 @@ void compute_venkat_limiter_cell(int cell_index,facelist_2D &F,cellist_2D &C)
         pmax = std::max(pmax, N.prim.p);
     }
 
-    double h = 1 ; //following SU2 documentation here, K=0
-    double K = 0.01;                   
-    double eps2 = std::pow(K*h, 3.0);
+     //double h = cell.cell_area ; //following SU2 documentation here, K=0
+     double K = 0.1;
+     double h= sqrt(cell.cell_area);
+     double kh= K*h;                  
+     double eps2 = kh*kh*kh;
 
     for (int f = 0; f < 3; f++)
     {
@@ -191,7 +236,6 @@ void compute_Gauss_Green_gradient(int cell_index ,facelist_2D &F,cellist_2D &C)
 
     cell2D &cell= C.cell_list[cell_index];
     
- 
     for(int f=0;f<3;f++)
     {
 
@@ -206,23 +250,9 @@ void compute_Gauss_Green_gradient(int cell_index ,facelist_2D &F,cellist_2D &C)
         if(nb>=0)// not boundary cell
         {
 
-        cell2D  &neighbour = C.cell_list[nb];
+           cell2D  &neighbour = C.cell_list[nb];
 
-        double d_owner_neighbour = std::sqrt
-        (
-           std::pow( neighbour.centroid.pos[0] - cell.centroid.pos[0], 2) +
-           std::pow( neighbour.centroid.pos[1] - cell.centroid.pos[1], 2)
-        );
-        
-        double d_face_neighbour = std::sqrt
-        (
-           std::pow( current_face.face_centroid.pos[0] - neighbour.centroid.pos[0], 2) +
-           std::pow( current_face.face_centroid.pos[1] - neighbour.centroid.pos[1], 2)
-        );
-        
-
-        //refer :CFD textbook by Moukalled and Darwish
-         double gc = d_face_neighbour/d_owner_neighbour;
+           double gc = current_face.gc;
 
             phi_face_temp.rho =  gc*(cell.prim.rho ) + (1.0-gc)*(neighbour.prim.rho);
             phi_face_temp.u =    gc*(cell.prim.u) + (1.0-gc)*(neighbour.prim.u);
@@ -324,7 +354,7 @@ void compute_Lax_Friedrichs_flux_MUSCL( face2D &face,cellist_2D &C, flux &result
 
 void reset_residuals(cellist_2D &C)
 {
-    
+    #pragma omp parallel for schedule(static)
     for (size_t c = 0; c < C.cell_list.size(); ++c)
     {
         for (int p = 0; p < 4; ++p)
@@ -337,21 +367,26 @@ void compute_residual(cellist_2D &C, boundary_marker_list &boundary, facelist_2D
 {
 
     reset_residuals(C);
-    // loop over faces
 
+    int nthreads = omp_get_max_threads();
+    size_t ncells = C.cell_list.size();
+
+    std::vector<std::vector<std::array<double,4>>> residual_private(
+    nthreads, std::vector<std::array<double,4>>(ncells, {0,0,0,0}));
+    
+    #pragma omp parallel for schedule(static)
     for (size_t c = 0; c < C.cell_list.size(); ++c)
     {
         C.cell_list[c].Grad = {};   // zero explicitly
         compute_Gauss_Green_gradient(c, F, C);
-    }
-
-    for (size_t c = 0; c < C.cell_list.size(); ++c)
-    {
         compute_venkat_limiter_cell(c, F, C);
-    }
+    } 
 
+    #pragma omp parallel for schedule(static) 
     for (size_t i = 0; i < F.face_list.size(); i++)
     {
+
+        int tid = omp_get_thread_num();
 
         face2D &current_face = F.face_list[i];
 
@@ -365,21 +400,36 @@ void compute_residual(cellist_2D &C, boundary_marker_list &boundary, facelist_2D
 
         if (neighbour_index != -1) // non boundary cells
         {
-            grad temp;
 
+        if (neighbour_index != -1)
+        {
             compute_Lax_Friedrichs_flux_MUSCL(current_face, C, temp_result, mat);
 
-             
-            for (int p = 0; p < 4; p++)
-            {
-                 C.cell_list[owner_index].residual[p] += temp_result.F[p] * current_face.len;
-                 C.cell_list[neighbour_index].residual[p] -= temp_result.F[p] * current_face.len;
+                for (int p = 0; p < 4; p++)
+                {
+                    residual_private[tid][owner_index][p] += temp_result.F[p] * current_face.len;
+                    residual_private[tid][neighbour_index][p] -= temp_result.F[p] * current_face.len;
+                }
             }
         }
-              
+
     }
 
+    for (int t = 0; t < nthreads; t++)
+    {
+        for (size_t c = 0; c < ncells; c++)
+        {
+            for (int p = 0; p < 4; p++)
+            {
+                C.cell_list[c].residual[p] += residual_private[t][c][p];
+            }
+        }
+    }
+              
+    
+
     // compute the time step for all cells
+    #pragma omp parallel for schedule(static)
     for (size_t i = 0; i < C.cell_list.size(); ++i)
     {
         C.cell_list[i].dt = compute_cell_time_step(C.cell_list[i], F, sim.CFL, mat);
@@ -474,54 +524,140 @@ void compute_Lax_Friedrichs_flux(face2D &current_face, cellist_2D &C, flux &resu
 
 
 
-void compute_Lax_Friedrichs_flux_freestream(face2D &current_face, cellist_2D &C, cell2D &ghost_neighbour, flux &result, material &mat, freestream &free_stream)
+// void compute_Lax_Friedrichs_flux_freestream(face2D &current_face, cellist_2D &C, cell2D &ghost_neighbour, flux &result, material &mat, freestream &free_stream)
+// {
+
+//     int Lcell_index;
+
+//     Lcell_index = current_face.owner;
+
+//     cell2D Lcell = C.cell_list[Lcell_index];
+
+//     cell2D Rcell;
+
+//     double nx = current_face.n.pos[0];
+//     double ny = current_face.n.pos[1];
+
+//     double un_L = Lcell.prim.u * nx + Lcell.prim.v * ny;
+
+
+//     ghost_neighbour.prim.rho = free_stream.rho_inf;
+//     ghost_neighbour.prim.u =  free_stream.u_inf;
+//     ghost_neighbour.prim.v =  free_stream.v_inf;
+//     ghost_neighbour.prim.p =  free_stream.p_inf;
+
+
+//     compute_conserved_cell_center(Lcell.prim, Lcell.cons, mat);
+
+//     compute_conserved_cell_center(ghost_neighbour.prim, ghost_neighbour.cons, mat);
+
+//     flux Fn_L;
+//     flux Fn_R;
+
+
+//     compute_normal_flux(current_face, Fn_L, Lcell.prim, mat);
+//     compute_normal_flux(current_face, Fn_R, ghost_neighbour.prim, mat);
+
+//     Rcell = ghost_neighbour;
+
+//     double temp_lambda = 0;
+
+//     double un_R = Rcell.prim.u * nx + Rcell.prim.v * ny;
+
+//     temp_lambda = compute_lambda(un_L, un_R, Lcell.prim.p, Rcell.prim.p, Lcell.prim.rho, Rcell.prim.rho, mat.gamma);
+
+//     for (int p = 0; p < 4; p++)
+//     {
+
+//         result.F[p] = 0.5 * (Fn_L.F[p] + Fn_R.F[p]) - 0.5 * temp_lambda * (Rcell.cons.U[p] - Lcell.cons.U[p]);
+//     }
+
+// }
+
+
+void compute_Lax_Friedrichs_flux_freestream(face2D &face, cellist_2D &C, cell2D &ghost, flux &result, material &mat, freestream &fs)
 {
+    int Lcell_index = face.owner;
+    cell2D &Lcell = C.cell_list[Lcell_index];
+    cell2D Rcell; 
 
-    int Lcell_index;
-
-    Lcell_index = current_face.owner;
-
-    cell2D Lcell = C.cell_list[Lcell_index];
-
-    cell2D Rcell;
-
-    double nx = current_face.n.pos[0];
-    double ny = current_face.n.pos[1];
+    double nx = face.n.pos[0];
+    double ny = face.n.pos[1];
+    double gm1 = mat.gamma - 1.0;
 
     double un_L = Lcell.prim.u * nx + Lcell.prim.v * ny;
+    double a_L  = sqrt(mat.gamma * Lcell.prim.p / Lcell.prim.rho);
 
+    if (un_L >= a_L) 
+    {
+        ghost.prim = Lcell.prim;
+    }
+    else if (un_L <= -a_L)
+    {
+        ghost.prim.rho = fs.rho_inf;
+        ghost.prim.u   = fs.u_inf;
+        ghost.prim.v   = fs.v_inf;
+        ghost.prim.p   = fs.p_inf;
+    }
 
-    ghost_neighbour.prim.rho = free_stream.rho_inf;
-    ghost_neighbour.prim.u =  free_stream.u_inf;
-    ghost_neighbour.prim.v =  free_stream.v_inf;
-    ghost_neighbour.prim.p =  free_stream.p_inf;
+    else 
+    {
+        double un_inf = fs.u_inf * nx + fs.v_inf * ny;
+        double a_inf  = sqrt(mat.gamma * fs.p_inf / fs.rho_inf);
 
+        double R_plus  = un_L   + 2.0 * a_L   / gm1;
+        double R_minus = un_inf - 2.0 * a_inf / gm1;
+
+        double u_boundary = 0.5 * (R_plus + R_minus);
+        double a_boundary = 0.25 * gm1 *(R_plus - R_minus);
+
+        double u_ref, v_ref, S_boundary, un_ref;
+        
+        if (un_L > 0.0) // Subsonic Outflow
+        { 
+            u_ref      = Lcell.prim.u;
+            v_ref      = Lcell.prim.v;
+            un_ref     = un_L;
+            S_boundary = Lcell.prim.p / pow(Lcell.prim.rho, mat.gamma);
+        }
+        else // Subsonic Inflow
+        { 
+            u_ref      = fs.u_inf;
+            v_ref      = fs.v_inf;
+            un_ref     = un_inf;
+            S_boundary = fs.p_inf / pow(fs.rho_inf, mat.gamma);
+        }
+
+        double u_bc = u_ref + nx * (u_boundary - un_ref);
+        double v_bc = v_ref + ny * (u_boundary - un_ref);
+
+        double rho_bc = pow( std::max(1e-10, (a_boundary * a_boundary) / (mat.gamma * S_boundary)), 1.0/gm1 );
+        double p_bc   = S_boundary * pow(rho_bc, mat.gamma);
+
+        ghost.prim.rho = rho_bc;
+        ghost.prim.u   = u_bc;
+        ghost.prim.v   = v_bc;
+        ghost.prim.p   = p_bc;
+    }
 
     compute_conserved_cell_center(Lcell.prim, Lcell.cons, mat);
+    compute_conserved_cell_center(ghost.prim, ghost.cons, mat);
 
-    compute_conserved_cell_center(ghost_neighbour.prim, ghost_neighbour.cons, mat);
+    Rcell = ghost; 
 
     flux Fn_L;
     flux Fn_R;
-
-
-    compute_normal_flux(current_face, Fn_L, Lcell.prim, mat);
-    compute_normal_flux(current_face, Fn_R, ghost_neighbour.prim, mat);
-
-    Rcell = ghost_neighbour;
-
-    double temp_lambda = 0;
+    compute_normal_flux(face, Fn_L, Lcell.prim, mat);
+    compute_normal_flux(face, Fn_R, Rcell.prim, mat);
 
     double un_R = Rcell.prim.u * nx + Rcell.prim.v * ny;
 
-    temp_lambda = compute_lambda(un_L, un_R, Lcell.prim.p, Rcell.prim.p, Lcell.prim.rho, Rcell.prim.rho, mat.gamma);
+    double temp_lambda = compute_lambda(un_L, un_R, Lcell.prim.p, Rcell.prim.p, Lcell.prim.rho, Rcell.prim.rho, mat.gamma);
 
     for (int p = 0; p < 4; p++)
     {
-
         result.F[p] = 0.5 * (Fn_L.F[p] + Fn_R.F[p]) - 0.5 * temp_lambda * (Rcell.cons.U[p] - Lcell.cons.U[p]);
     }
-
 }
 
 
@@ -728,8 +864,5 @@ std::array<double, 4> compute_L2_residual(cellist_2D &C)
 
     return R;
 }
-
-
-
 
 

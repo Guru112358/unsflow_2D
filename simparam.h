@@ -12,4 +12,6 @@ struct simparam
 
     std::string output_filename;
 
+    unsigned int nthreads;
+
 };

@@ -5,6 +5,7 @@
 #include<vector>
 #include<string>
 #include <sstream>
+#include<omp.h>
 #include "materials.h"
 
 #include "flowvar.cpp"
@@ -21,6 +22,7 @@
 int main(int argc, char* argv[])
 {
 
+
     material mat;
     simparam sim;
 
@@ -31,6 +33,9 @@ int main(int argc, char* argv[])
     std::string meshfile;
 
     read_setup_file(argv[1],free_stream,mat,fv.boundary,fv.clist,meshfile,sim);
+
+    omp_set_num_threads(sim.nthreads);
+
 
 
     std::cout<<"||  computing  geometry parameters ..... ||"<<"\n";
@@ -53,7 +58,7 @@ int main(int argc, char* argv[])
  
 
     init_freestream(fv.clist,free_stream,mat);
-
+    compute_gradient_weights(fv.F,fv.clist);
 
     std::cout<<"||  starting UNSFLOW: - ||"<<"\n";
 
@@ -102,8 +107,8 @@ int main(int argc, char* argv[])
           << res[1]/res0[1] << ", "
           << res[2]/res0[2] << ", "
           << res[3]/res0[3] << "]"
-         // <<"  | Cl= " << fv.boundary.marker_list[1].coeffs[1]   (they seem to be a bit broken at the moment so would not suggest trusting the values)
-          //<<", Cd= " << fv.boundary.marker_list[1].coeffs[0] <<" |"
+          //<<"  | Cl= " << fv.boundary.marker_list[1].coeffs[1]
+         // <<", Cd= " << fv.boundary.marker_list[1].coeffs[0] <<" |"
           << std::endl;
 
           res_record<<loop_counter << ","
@@ -111,9 +116,8 @@ int main(int argc, char* argv[])
           << res[1]/res0[1] << ", "
           << res[2]/res0[2] << ", "
           << res[3]/res0[3] << ", "
-          //<< fv.boundary.marker_list[1].coeffs[1]
-         // <<", " << fv.boundary.marker_list[1].coeffs[0]
-			  <<std::endl;
+          << fv.boundary.marker_list[1].coeffs[1]
+          <<", " << fv.boundary.marker_list[1].coeffs[0]<<std::endl;
              //write_vtk_2d("output.vtk",fv.clist.cell_list);
 
         

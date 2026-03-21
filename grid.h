@@ -47,6 +47,8 @@ struct face2D
     int owner=-1;
     int neighbour=-1;
     flux_2D flux;
+    double gc;
+
 };
 
 struct facelist_2D

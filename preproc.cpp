@@ -24,6 +24,7 @@ void read_setup_file(const std::string &filename, freestream &free_stream, mater
     file >> sim.print_interval;
     file >> sim.write_interval;
     file >> sim.output_filename;
+    file >> sim.nthreads;
 
     std::cout << "|| Reading grid..... ||" << "\n";
 

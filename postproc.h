@@ -164,9 +164,26 @@ void compute_pressure_coefficient(std::string filename ,boundary_marker_list &bo
 
         cp<<current_face.face_centroid.pos[0]<<","<<temp_cp<<std::endl;
 
+   
         double nx = current_face.n.pos[0];
         double ny = current_face.n.pos[1];
-        
+
+        double xf = current_face.face_centroid.pos[0];
+        double yf = current_face.face_centroid.pos[1];
+
+        double xc = clist.cell_list[owner_index].centroid.pos[0];
+        double yc = clist.cell_list[owner_index].centroid.pos[1];
+
+        // vector from face -> cell centroid
+        double dx = xc - xf;
+        double dy = yc - yf;
+
+    // if normal points toward cell, flip it
+        if (nx*dx + ny*dy > 0.0)
+        {
+            nx = -nx;
+            ny = -ny;
+        }
 
         Fx+=  -(clist.cell_list[owner_index].prim.p)*current_face.len*nx;
         Fy+=  -(clist.cell_list[owner_index].prim.p)*current_face.len*ny;
@@ -179,11 +196,14 @@ void compute_pressure_coefficient(std::string filename ,boundary_marker_list &bo
     double ca = cos(free_stream.AoA);
     double sa = sin(free_stream.AoA);
 
+    double Drag = Fx*ca + Fy*sa;
+    double Lift = -Fx*sa + Fy*ca;
     double denom = 0.5*rho*V_inf*V_inf  ; 
 
-    boundary.marker_list[marker_index].coeffs[0] = Cd;
-    boundary.marker_list[marker_index].coeffs[1] = Cl;
+    boundary.marker_list[marker_index].coeffs[0] = Drag/denom;
+    boundary.marker_list[marker_index].coeffs[1] = Lift/denom;
 
+    
     //std::cout << "Cl= " << Cl<<" , "
         //   << "Cd= "
         //   <<Cd
