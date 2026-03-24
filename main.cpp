@@ -107,8 +107,8 @@ int main(int argc, char* argv[])
           << res[1]/res0[1] << ", "
           << res[2]/res0[2] << ", "
           << res[3]/res0[3] << "]"
-          //<<"  | Cl= " << fv.boundary.marker_list[1].coeffs[1]
-         // <<", Cd= " << fv.boundary.marker_list[1].coeffs[0] <<" |"
+          <<"  | Cl= " << fv.boundary.marker_list[1].coeffs[0]
+          <<", Cd= " << fv.boundary.marker_list[1].coeffs[1] <<" |"
           << std::endl;
 
           res_record<<loop_counter << ","
