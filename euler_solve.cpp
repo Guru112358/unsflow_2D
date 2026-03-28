@@ -395,11 +395,7 @@ void compute_residual(cellist_2D &C, boundary_marker_list &boundary, facelist_2D
         int owner_index = current_face.owner;
 
         int neighbour_index = current_face.neighbour;
-
-       
-
-        if (neighbour_index != -1) // non boundary cells
-        {
+        
 
         if (neighbour_index != -1)
         {
@@ -410,8 +406,9 @@ void compute_residual(cellist_2D &C, boundary_marker_list &boundary, facelist_2D
                     residual_private[tid][owner_index][p] += temp_result.F[p] * current_face.len;
                     residual_private[tid][neighbour_index][p] -= temp_result.F[p] * current_face.len;
                 }
-            }
+            
         }
+        
 
     }
 
