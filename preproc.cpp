@@ -23,6 +23,7 @@ void read_setup_file(const std::string &filename, freestream &free_stream, mater
     file >> sim.MAX_ITER;
     file >> sim.print_interval;
     file >> sim.write_interval;
+    file>>sim.venkat_k;
     file >> sim.output_filename;
     file >> sim.nthreads;
 
