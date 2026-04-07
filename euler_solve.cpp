@@ -17,6 +17,8 @@ void correct_Gauss_Green_gradient(int cell_index ,facelist_2D &F,cellist_2D &C);
 void compute_barth_limiter_cell(int cell_index, facelist_2D &F, cellist_2D &C);
 primitive reconstruct_face_primitive_limited(const cell2D &C,const point2D &xf);
 void compute_gradient_weights(facelist_2D&F,cellist_2D &C);
+void compute_venkat_limiter_cell(int cell_index,facelist_2D &F,cellist_2D &C,simparam &sim);
+
 
 
 
@@ -164,7 +166,7 @@ void compute_barth_limiter_cell(int cell_index, facelist_2D &F, cellist_2D &C)
     cell.limiter_p   = phi_p;
 }
 
-void compute_venkat_limiter_cell(int cell_index,facelist_2D &F,cellist_2D &C)
+void compute_venkat_limiter_cell(int cell_index,facelist_2D &F,cellist_2D &C,simparam &sim)
 {
     cell2D &cell = C.cell_list[cell_index];
 
@@ -200,10 +202,9 @@ void compute_venkat_limiter_cell(int cell_index,facelist_2D &F,cellist_2D &C)
         pmax = std::max(pmax, N.prim.p);
     }
 
-     //double h = cell.cell_area ; //following SU2 documentation here, K=0
-     double K = 0.1;
+
      double h= sqrt(cell.cell_area);
-     double kh= K*h;                  
+     double kh= sim.venkat_k*h;                  
      double eps2 = kh*kh*kh;
 
     for (int f = 0; f < 3; f++)
@@ -230,6 +231,8 @@ void compute_venkat_limiter_cell(int cell_index,facelist_2D &F,cellist_2D &C)
     cell.limiter_v   = phi_v;
     cell.limiter_p   = phi_p;
 }
+
+
 
 void compute_Gauss_Green_gradient(int cell_index ,facelist_2D &F,cellist_2D &C)
 {
@@ -379,7 +382,7 @@ void compute_residual(cellist_2D &C, boundary_marker_list &boundary, facelist_2D
     {
         C.cell_list[c].Grad = {};   // zero explicitly
         compute_Gauss_Green_gradient(c, F, C);
-        compute_venkat_limiter_cell(c, F, C);
+        compute_venkat_limiter_cell(c, F, C,sim);
     } 
 
     #pragma omp parallel for schedule(static) 
@@ -395,7 +398,11 @@ void compute_residual(cellist_2D &C, boundary_marker_list &boundary, facelist_2D
         int owner_index = current_face.owner;
 
         int neighbour_index = current_face.neighbour;
-        
+
+       
+
+        if (neighbour_index != -1) // non boundary cells
+        {
 
         if (neighbour_index != -1)
         {
@@ -406,9 +413,8 @@ void compute_residual(cellist_2D &C, boundary_marker_list &boundary, facelist_2D
                     residual_private[tid][owner_index][p] += temp_result.F[p] * current_face.len;
                     residual_private[tid][neighbour_index][p] -= temp_result.F[p] * current_face.len;
                 }
-            
+            }
         }
-        
 
     }
 
@@ -816,6 +822,8 @@ void apply_Euler_wall(boundary_marker_list &boundary, cellist_2D &C, facelist_2D
 }
 
 
+
+
 void apply_boundary_conditions(boundary_marker_list &boundary, cellist_2D &C, facelist_2D &F, freestream &free_stream, material &mat)
 {
 
@@ -825,10 +833,11 @@ void apply_boundary_conditions(boundary_marker_list &boundary, cellist_2D &C, fa
         {
             apply_freestream(boundary,C,F,free_stream,mat,m);
         }
-        else
+        else if(boundary.marker_list[m].btype==1)
         {
             apply_Euler_wall(boundary,C,F,free_stream,mat,m);
         }
+
     }
 
 }
