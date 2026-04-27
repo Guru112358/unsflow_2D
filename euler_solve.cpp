@@ -292,7 +292,7 @@ void compute_Gauss_Green_gradient(int cell_index ,facelist_2D &F,cellist_2D &C)
 }
 
 
-primitive reconstruct_face_primitive_limited(const cell2D &C,const point2D &xf)
+inline primitive reconstruct_face_primitive_limited(const cell2D &C,const point2D &xf)
 {
     primitive W = C.prim;
 
